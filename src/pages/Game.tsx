@@ -4,12 +4,10 @@ import { FiPause } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Dashboard } from '../components/Dashboard'
 import { EndTurnButton } from '../components/EndTurnButton'
-import { FuelGauge } from '../components/FuelGauge'
 import { PauseOverlay } from '../components/PauseOverlay'
 import { PlayerBanner } from '../components/PlayerBanner'
 import { SettingsModal } from '../components/SettingsModal'
 import { Tachometer } from '../components/Tachometer'
-import { TemperatureGauge } from '../components/TemperatureGauge'
 import { TimerDisplay } from '../components/TimerDisplay'
 import { WarningLights } from '../components/WarningLights'
 import { useGameTimer } from '../hooks/useGameTimer'
@@ -85,25 +83,38 @@ export function Game() {
 
   useEffect(() => {
     timer.start(true)
+    audio.startEngine()
     const timeout = window.setTimeout(() => setShowBanner(false), 1000)
     return () => {
       window.clearTimeout(timeout)
-      audio.stopAll()
     }
     // Intentional mount-only start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    return () => {
+      audio.stopAll()
+    }
+  }, [audio])
+
   const progress = progressFromRemaining(timer.remainingMs, durationMs)
   const rpm = timer.isExpired ? 8000 : rpmFromProgress(progress)
+
+  useEffect(() => {
+    if (showPause || showSettings || gameEnded) {
+      audio.stopEngine()
+      return
+    }
+
+    audio.startEngine()
+    audio.updateEngineRpm(rpm)
+  }, [audio, rpm, showPause, showSettings, gameEnded])
 
   const remainingSeconds = Math.ceil(timer.remainingMs / 1000)
   const yellowOn = remainingSeconds <= settings.warningThresholds.yellow
   const redOn = remainingSeconds <= settings.warningThresholds.red
   const criticalOn = remainingSeconds <= settings.warningThresholds.critical
-
-  const fuelLevel = 1 - progress
-  const temperatureLevel = progress
 
   const currentPlayer = rotation.currentPlayer
   const accentColor = currentPlayer ? PLAYER_COLORS[currentPlayer.color] : '#f97316'
@@ -219,11 +230,6 @@ export function Game() {
 
         <div className="mt-6 flex justify-center">
           <Tachometer rpm={rpm} critical={criticalOn || timer.isExpired} intensity={settings.animationIntensity} />
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <FuelGauge level={fuelLevel} />
-          <TemperatureGauge level={temperatureLevel} />
         </div>
 
         <div className="mt-6">
