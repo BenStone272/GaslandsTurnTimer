@@ -4,9 +4,17 @@ interface PlayerBannerProps {
   show: boolean
   playerName: string
   colorHex: string
+  requireTap?: boolean
+  onConfirm?: () => void
 }
 
-export function PlayerBanner({ show, playerName, colorHex }: PlayerBannerProps) {
+export function PlayerBanner({
+  show,
+  playerName,
+  colorHex,
+  requireTap = false,
+  onConfirm,
+}: PlayerBannerProps) {
   return (
     <AnimatePresence>
       {show ? (
@@ -17,19 +25,28 @@ export function PlayerBanner({ show, playerName, colorHex }: PlayerBannerProps) 
           className="fixed inset-0 z-50 flex items-center justify-center"
         >
           <div className="absolute inset-0 bg-black/80" />
-          <motion.div
+          <motion.button
+            type="button"
             initial={{ scale: 0.85, y: 24 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.92, y: -18 }}
             className="relative rounded-3xl border border-zinc-500 bg-zinc-950 px-8 py-12 text-center shadow-[0_0_45px_rgba(0,0,0,0.85)]"
             style={{ boxShadow: `0 0 60px ${colorHex}66` }}
+            onClick={() => {
+              if (!requireTap) return
+              onConfirm?.()
+            }}
+            aria-label={requireTap ? `Start turn for ${playerName}` : undefined}
           >
             <p className="text-lg uppercase tracking-[0.25em] text-zinc-400">Driver Up</p>
             <h2 className="mt-2 text-5xl font-stencil uppercase tracking-[0.08em]" style={{ color: colorHex }}>
               {playerName}
             </h2>
             <p className="mt-3 text-3xl font-black uppercase tracking-[0.26em] text-zinc-200">Drive!</p>
-          </motion.div>
+            {requireTap ? (
+              <p className="mt-4 text-sm uppercase tracking-[0.2em] text-zinc-400">Tap To Start Turn</p>
+            ) : null}
+          </motion.button>
         </motion.div>
       ) : null}
     </AnimatePresence>

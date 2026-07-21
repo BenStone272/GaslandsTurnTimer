@@ -1,6 +1,10 @@
+import engineLoopUrl from '../assets/muscle car sound2.mp3'
+import crashSoundUrl from '../assets/car-crash.mp3'
+
 export interface AudioController {
   playClick: () => void
   playWarning: () => void
+  playCrash: () => void
   startEngine: () => void
   updateEngineRpm: (rpm: number) => void
   stopEngine: () => void
@@ -18,11 +22,12 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
   let context: AudioContext | null = null
   let masterGain: GainNode | null = null
   let engineGain: GainNode | null = null
-  let lowOscillator: OscillatorNode | null = null
-  let highOscillator: OscillatorNode | null = null
-  let noiseSource: AudioBufferSourceNode | null = null
-  let noiseFilter: BiquadFilterNode | null = null
+  let engineFilter: BiquadFilterNode | null = null
+  let engineAudio: HTMLAudioElement | null = null
+  let engineSource: MediaElementAudioSourceNode | null = null
   let engineInitialized = false
+  let startupPlayed = false
+  const startupDurationSec = 1
 
   const ensureContext = (): AudioContext | null => {
     if (!enabled) return null
@@ -44,18 +49,6 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     return context
   }
 
-  const createNoiseBuffer = (ctx: AudioContext): AudioBuffer => {
-    const length = Math.floor(ctx.sampleRate * 2)
-    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
-    const output = buffer.getChannelData(0)
-
-    for (let i = 0; i < length; i += 1) {
-      output[i] = (Math.random() * 2 - 1) * 0.6
-    }
-
-    return buffer
-  }
-
   const initializeEngine = () => {
     const ctx = ensureContext()
     if (!ctx || !masterGain || engineInitialized) return
@@ -63,32 +56,28 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     engineGain = ctx.createGain()
     engineGain.gain.value = 0
 
-    lowOscillator = ctx.createOscillator()
-    lowOscillator.type = 'sawtooth'
-    lowOscillator.frequency.value = 34
+    engineFilter = ctx.createBiquadFilter()
+    engineFilter.type = 'lowpass'
+    engineFilter.frequency.value = 1800
+    engineFilter.Q.value = 0.8
 
-    highOscillator = ctx.createOscillator()
-    highOscillator.type = 'square'
-    highOscillator.frequency.value = 72
+    engineAudio = new Audio(engineLoopUrl)
+    engineAudio.loop = false
+    engineAudio.preload = 'auto'
+    engineAudio.volume = 1
+    engineAudio.onended = () => {
+      if (!engineAudio) return
+      engineAudio.currentTime = startupDurationSec
+      void engineAudio.play().catch(() => {
+        // Playback can fail before first user gesture on some browsers.
+      })
+    }
 
-    noiseSource = ctx.createBufferSource()
-    noiseSource.buffer = createNoiseBuffer(ctx)
-    noiseSource.loop = true
-
-    noiseFilter = ctx.createBiquadFilter()
-    noiseFilter.type = 'bandpass'
-    noiseFilter.frequency.value = 220
-    noiseFilter.Q.value = 0.8
-
-    lowOscillator.connect(engineGain)
-    highOscillator.connect(engineGain)
-    noiseSource.connect(noiseFilter)
-    noiseFilter.connect(engineGain)
+    engineSource = ctx.createMediaElementSource(engineAudio)
+    engineSource.connect(engineFilter)
+    engineFilter.connect(engineGain)
     engineGain.connect(masterGain)
 
-    lowOscillator.start()
-    highOscillator.start()
-    noiseSource.start()
     engineInitialized = true
   }
 
@@ -114,6 +103,17 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     osc.stop(now + durationMs / 1000 + 0.02)
   }
 
+  const playOneShotSample = (url: string, level: number) => {
+    if (!enabled || typeof window === 'undefined') return
+    const sample = new Audio(url)
+    sample.preload = 'auto'
+    sample.volume = clamp(level, 0, 1)
+    sample.currentTime = 0
+    void sample.play().catch(() => {
+      // Playback can fail before first user gesture on some browsers.
+    })
+  }
+
   return {
     playClick: () => {
       if (!enabled) return
@@ -123,36 +123,70 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
       if (!enabled) return
       shortTone(WARNING_FREQUENCY, 120, clamp(volume * 0.35, 0.03, 0.25))
     },
+    playCrash: () => {
+      playOneShotSample(crashSoundUrl, volume * 0.9)
+    },
     startEngine: () => {
       if (!enabled) return
       initializeEngine()
-      if (!context || !engineGain) return
+      if (!context || !engineGain || !engineAudio) return
 
       const now = context.currentTime
       engineGain.gain.cancelScheduledValues(now)
       engineGain.gain.setTargetAtTime(clamp(volume * 0.24, 0.04, 0.35), now, 0.08)
+
+      if (!startupPlayed) {
+        engineAudio.currentTime = 0
+        startupPlayed = true
+      } else if (engineAudio.currentTime < startupDurationSec) {
+        engineAudio.currentTime = startupDurationSec
+      }
+
+      if (engineAudio.paused) {
+        void engineAudio.play().catch(() => {
+          // Playback can fail before first user gesture on some browsers.
+        })
+      }
     },
     updateEngineRpm: (rpm: number) => {
       if (!enabled) return
       initializeEngine()
-      if (!context || !lowOscillator || !highOscillator || !noiseFilter) return
+      if (!context || !engineAudio || !engineFilter) return
 
       const rpmClamped = clamp(rpm, 1000, 8000)
       const normalized = (rpmClamped - 1000) / 7000
-      const baseHz = 28 + normalized * 58
       const now = context.currentTime
+      const playbackRate = 0.68 + normalized * 1.32
 
-      lowOscillator.frequency.setTargetAtTime(baseHz, now, 0.06)
-      highOscillator.frequency.setTargetAtTime(baseHz * 2.1, now, 0.06)
-      noiseFilter.frequency.setTargetAtTime(180 + normalized * 980, now, 0.1)
+      engineAudio.playbackRate = clamp(playbackRate, 0.65, 2)
+      engineFilter.frequency.setTargetAtTime(1200 + normalized * 2600, now, 0.12)
+
+      const preservePitchElement = engineAudio as HTMLAudioElement & {
+        mozPreservesPitch?: boolean
+        webkitPreservesPitch?: boolean
+        preservesPitch?: boolean
+      }
+      preservePitchElement.preservesPitch = false
+      preservePitchElement.webkitPreservesPitch = false
+      preservePitchElement.mozPreservesPitch = false
     },
     stopEngine: () => {
       if (!context || !engineGain) return
       const now = context.currentTime
       engineGain.gain.cancelScheduledValues(now)
       engineGain.gain.setTargetAtTime(0.0001, now, 0.08)
+
+      if (engineAudio) {
+        engineAudio.pause()
+      }
     },
     stopAll: () => {
+      if (engineAudio) {
+        engineAudio.pause()
+        engineAudio.currentTime = 0
+        engineAudio.onended = null
+      }
+
       if (context) {
         void context.close()
       }
@@ -160,11 +194,11 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
       context = null
       masterGain = null
       engineGain = null
-      lowOscillator = null
-      highOscillator = null
-      noiseSource = null
-      noiseFilter = null
+      engineFilter = null
+      engineSource = null
+      engineAudio = null
       engineInitialized = false
+      startupPlayed = false
     },
   }
 }

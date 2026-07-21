@@ -62,6 +62,7 @@ export function Game() {
   const [showPause, setShowPause] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showBanner, setShowBanner] = useState(true)
+  const [awaitingDriverTap, setAwaitingDriverTap] = useState(true)
   const [turns, setTurns] = useState<TurnRecord[]>([])
   const [gameEnded, setGameEnded] = useState(false)
   const [gearPhase, setGearPhase] = useState(1)
@@ -73,6 +74,8 @@ export function Game() {
     durationMs,
     onExpire: () => {
       audio.playWarning()
+      audio.playCrash()
+      audio.stopEngine()
     },
   })
 
@@ -80,17 +83,6 @@ export function Game() {
     () => createAudioController(settings.soundsEnabled, settings.masterVolume),
     [settings.soundsEnabled, settings.masterVolume],
   )
-
-  useEffect(() => {
-    timer.start(true)
-    audio.startEngine()
-    const timeout = window.setTimeout(() => setShowBanner(false), 1000)
-    return () => {
-      window.clearTimeout(timeout)
-    }
-    // Intentional mount-only start.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     return () => {
@@ -102,14 +94,14 @@ export function Game() {
   const rpm = timer.isExpired ? 8000 : rpmFromProgress(progress)
 
   useEffect(() => {
-    if (showPause || showSettings || gameEnded) {
+    if (showPause || showSettings || gameEnded || showBanner || timer.isExpired) {
       audio.stopEngine()
       return
     }
 
     audio.startEngine()
     audio.updateEngineRpm(rpm)
-  }, [audio, rpm, showPause, showSettings, gameEnded])
+  }, [audio, rpm, showPause, showSettings, gameEnded, showBanner, timer.isExpired])
 
   const remainingSeconds = Math.ceil(timer.remainingMs / 1000)
   const yellowOn = remainingSeconds <= settings.warningThresholds.yellow
@@ -118,6 +110,15 @@ export function Game() {
 
   const currentPlayer = rotation.currentPlayer
   const accentColor = currentPlayer ? PLAYER_COLORS[currentPlayer.color] : '#f97316'
+
+  const startCurrentPlayerTurn = () => {
+    setShowBanner(false)
+    setAwaitingDriverTap(false)
+    timer.reset()
+    timer.start(true)
+    audio.startEngine()
+    audio.playClick()
+  }
 
   const endCurrentTurn = () => {
     const elapsedMs = durationMs - timer.remainingMs
@@ -133,9 +134,10 @@ export function Game() {
 
     rotation.nextPlayer()
     timer.reset()
-    timer.start(true)
+    timer.pause()
     setShowBanner(true)
-    window.setTimeout(() => setShowBanner(false), 900)
+    setAwaitingDriverTap(true)
+    audio.stopEngine()
     audio.playClick()
   }
 
@@ -184,7 +186,13 @@ export function Game() {
 
   return (
     <Dashboard accentColor={accentColor} shaking={criticalOn || timer.isExpired}>
-      <PlayerBanner show={showBanner} playerName={currentPlayer.name} colorHex={accentColor} />
+      <PlayerBanner
+        show={showBanner}
+        playerName={currentPlayer.name}
+        colorHex={accentColor}
+        requireTap={awaitingDriverTap}
+        onConfirm={startCurrentPlayerTurn}
+      />
 
       <div className="relative z-10" onClick={handleSurfaceTap}>
         <div className="flex items-start justify-between gap-3">
