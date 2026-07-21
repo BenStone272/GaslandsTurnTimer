@@ -237,7 +237,12 @@ export function Game() {
         </div>
 
         <div className="mt-6 flex justify-center">
-          <Tachometer rpm={rpm} critical={criticalOn || timer.isExpired} intensity={settings.animationIntensity} />
+          <Tachometer
+            rpm={rpm}
+            critical={criticalOn || timer.isExpired}
+            intensity={settings.animationIntensity}
+            gear={gearPhase}
+          />
         </div>
 
         <div className="mt-6">

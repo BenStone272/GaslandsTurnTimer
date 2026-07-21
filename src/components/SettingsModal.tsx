@@ -20,9 +20,14 @@ function createPlayer(index: number, color: TeamColor): Player {
 export function SettingsModal({ initialSettings, onClose, onSave }: SettingsModalProps) {
   const [settings, setSettings] = useState(initialSettings)
 
-  const setGearDuration = (gearIndex: number, value: number) => {
+  const setGearDuration = (gearIndex: number, value: number, finalize = false) => {
     const nextDurations = [...settings.gearDurations] as [number, number, number, number, number, number]
-    nextDurations[gearIndex] = Math.max(5, Math.min(180, Number(value) || 5))
+    const parsedValue = Number.isFinite(value) ? value : 0
+
+    nextDurations[gearIndex] = finalize
+      ? Math.max(5, Math.min(180, parsedValue || 5))
+      : Math.max(0, Math.min(180, parsedValue))
+
     setSettings({ ...settings, gearDurations: nextDurations })
   }
 
@@ -106,7 +111,8 @@ export function SettingsModal({ initialSettings, onClose, onSave }: SettingsModa
                 min={5}
                 max={180}
                 value={duration}
-                onChange={(event) => setGearDuration(index, Number(event.target.value))}
+                onChange={(event) => setGearDuration(index, Number(event.target.value), false)}
+                onBlur={(event) => setGearDuration(index, Number(event.target.value), true)}
               />
             </label>
           ))}

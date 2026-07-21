@@ -5,9 +5,10 @@ interface TachometerProps {
   rpm: number
   critical: boolean
   intensity: number
+  gear: number
 }
 
-export function Tachometer({ rpm, critical, intensity }: TachometerProps) {
+export function Tachometer({ rpm, critical, intensity, gear }: TachometerProps) {
   const normalized = clamp((rpm - 1000) / 7000, 0, 1)
   const angle = -126 + normalized * 252
 
@@ -41,6 +42,11 @@ export function Tachometer({ rpm, critical, intensity }: TachometerProps) {
 
   return (
     <div className="relative w-full max-w-[680px] rounded-[2.3rem] border border-zinc-700 bg-zinc-950/70 p-5 shadow-[inset_0_0_50px_rgba(0,0,0,0.85)]">
+      <div className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-3 py-2 text-center shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Gear</p>
+        <p className="font-digital text-4xl leading-none text-yellow-400">{gear}</p>
+      </div>
+
       <div className="relative mx-auto aspect-square w-full max-w-[560px] overflow-hidden rounded-full border-[6px] border-zinc-700 bg-gradient-to-b from-zinc-700 via-zinc-900 to-zinc-950 shadow-[inset_0_0_60px_rgba(0,0,0,0.95)]">
         <svg viewBox="0 0 100 100" className="h-full w-full">
           <defs>
