@@ -18,6 +18,18 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+type WebAudioContextCtor = typeof AudioContext
+
+function getAudioContextCtor(): WebAudioContextCtor | null {
+  if (typeof window === 'undefined') return null
+
+  const maybeWindow = window as Window & {
+    webkitAudioContext?: WebAudioContextCtor
+  }
+
+  return window.AudioContext ?? maybeWindow.webkitAudioContext ?? null
+}
+
 export function createAudioController(enabled: boolean, volume: number): AudioController {
   let context: AudioContext | null = null
   let masterGain: GainNode | null = null
@@ -36,12 +48,13 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
 
   const ensureContext = (): AudioContext | null => {
     if (!enabled) return null
-    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') {
+    const AudioContextCtor = getAudioContextCtor()
+    if (!AudioContextCtor) {
       return null
     }
 
     if (!context) {
-      context = new AudioContext()
+      context = new AudioContextCtor()
       masterGain = context.createGain()
       masterGain.gain.value = clamp(volume, 0, 1)
       masterGain.connect(context.destination)

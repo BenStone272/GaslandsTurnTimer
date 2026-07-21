@@ -10,9 +10,14 @@ export function useGameTimer({ durationMs, onExpire }: UseGameTimerOptions) {
   const [isRunning, setIsRunning] = useState(false)
   const [isExpired, setIsExpired] = useState(false)
 
+  const onExpireRef = useRef(onExpire)
   const remainingRef = useRef(durationMs)
   const endTimeRef = useRef<number | null>(null)
   const rafIdRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    onExpireRef.current = onExpire
+  }, [onExpire])
 
   const stopFrame = useCallback(() => {
     if (rafIdRef.current !== null) {
@@ -60,7 +65,7 @@ export function useGameTimer({ durationMs, onExpire }: UseGameTimerOptions) {
       if (nextRemaining <= 0) {
         setIsRunning(false)
         setIsExpired(true)
-        onExpire?.()
+        onExpireRef.current?.()
         stopFrame()
         return
       }
@@ -74,7 +79,7 @@ export function useGameTimer({ durationMs, onExpire }: UseGameTimerOptions) {
       stopFrame()
       endTimeRef.current = null
     }
-  }, [isRunning, isExpired, onExpire, stopFrame])
+  }, [isRunning, isExpired, stopFrame])
 
   useEffect(() => {
     reset()
