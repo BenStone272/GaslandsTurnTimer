@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --bg-0: #0b0b0b;
+  --bg-1: #1a1a1a;
+  --bg-2: #2f2b29;
+  --rust: #d46a1f;
+  --warning: #facc15;
+  --danger: #dc2626;
+}
+
+body {
+  margin: 0;
+  font-family: 'Rajdhani', sans-serif;
+  background: linear-gradient(160deg, var(--bg-0), var(--bg-1) 55%, #121215);
+  color: #ededed;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-stencil {
+  font-family: 'Black Ops One', sans-serif;
+}
+
+.font-digital {
+  font-family: 'Orbitron', monospace;
+}
+
+.home-btn {
+  min-height: 64px;
+  border-radius: 999px;
+  border: 1px solid #52525b;
+  background: linear-gradient(180deg, #292929, #101010);
+  color: #f4f4f5;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home-btn.accent {
+  border-color: #f97316;
+  background: linear-gradient(180deg, #fb923c, #b45309);
+  color: #111827;
+}
+
+.panel-btn {
+  min-height: 52px;
+  border-radius: 0.8rem;
+  border: 1px solid #52525b;
+  background: #161616;
+  color: #f3f4f6;
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.panel-btn.accent {
+  border-color: #fb923c;
+  background: #9a3412;
+}
+
+.panel-btn.critical {
+  border-color: #f87171;
+  background: #7f1d1d;
+}
+
+.field,
+.check-field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d4d4d8;
+}
+
+.field input,
+.input,
+.field select {
+  min-height: 48px;
+  border-radius: 0.7rem;
+  border: 1px solid #52525b;
+  background: #111113;
+  color: #f4f4f5;
+  padding: 0 0.85rem;
+  font-size: 1rem;
+}
+
+.check-field {
+  align-items: center;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: 0.5rem;
+}
+
+.check-field input {
+  width: 20px;
+  height: 20px;
+}
+
+.dust-layer {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 30% 35%, rgba(212, 106, 31, 0.18), transparent 28%),
+    radial-gradient(circle at 75% 65%, rgba(245, 158, 11, 0.16), transparent 24%),
+    radial-gradient(circle at 52% 20%, rgba(180, 83, 9, 0.12), transparent 22%);
+  filter: blur(28px);
+  animation: drift 28s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(2%, 1%, 0) scale(1.07);
+  }
+}
