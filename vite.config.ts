@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const REPO_BASE = '/GaslandsTurnTimer/'
+
 // https://vite.dev/config/
 export default defineConfig({
+  base: REPO_BASE,
   plugins: [
     react(),
     tailwindcss(),
@@ -18,17 +21,17 @@ export default defineConfig({
         theme_color: '#111111',
         background_color: '#111111',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        start_url: REPO_BASE,
+        scope: REPO_BASE,
         orientation: 'portrait-primary',
         icons: [
           {
-            src: '/favicon.svg',
+            src: 'favicon.svg',
             sizes: '192x192',
             type: 'image/svg+xml',
           },
           {
-            src: '/favicon.svg',
+            src: 'favicon.svg',
             sizes: '512x512',
             type: 'image/svg+xml',
           },
