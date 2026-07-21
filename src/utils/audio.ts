@@ -23,10 +23,15 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
   let masterGain: GainNode | null = null
   let engineGain: GainNode | null = null
   let engineFilter: BiquadFilterNode | null = null
-  let engineAudio: HTMLAudioElement | null = null
-  let engineSource: MediaElementAudioSourceNode | null = null
+  let engineSource: AudioBufferSourceNode | null = null
+  let engineBuffer: AudioBuffer | null = null
+  let crashBuffer: AudioBuffer | null = null
+  let engineBufferPromise: Promise<AudioBuffer> | null = null
+  let crashBufferPromise: Promise<AudioBuffer> | null = null
   let engineInitialized = false
+  let shouldEngineRun = false
   let startupPlayed = false
+  let currentEnginePlaybackRate = 0.68
   const startupDurationSec = 1
 
   const ensureContext = (): AudioContext | null => {
@@ -61,24 +66,74 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     engineFilter.frequency.value = 1800
     engineFilter.Q.value = 0.8
 
-    engineAudio = new Audio(engineLoopUrl)
-    engineAudio.loop = false
-    engineAudio.preload = 'auto'
-    engineAudio.volume = 1
-    engineAudio.onended = () => {
-      if (!engineAudio) return
-      engineAudio.currentTime = startupDurationSec
-      void engineAudio.play().catch(() => {
-        // Playback can fail before first user gesture on some browsers.
-      })
-    }
-
-    engineSource = ctx.createMediaElementSource(engineAudio)
-    engineSource.connect(engineFilter)
     engineFilter.connect(engineGain)
     engineGain.connect(masterGain)
 
     engineInitialized = true
+  }
+
+  const loadBuffer = async (url: string): Promise<AudioBuffer> => {
+    const ctx = ensureContext()
+    if (!ctx) {
+      throw new Error('Audio context unavailable')
+    }
+
+    const response = await fetch(url)
+    const arrayBuffer = await response.arrayBuffer()
+    return ctx.decodeAudioData(arrayBuffer)
+  }
+
+  const ensureEngineBuffer = (): Promise<AudioBuffer> => {
+    if (engineBuffer) return Promise.resolve(engineBuffer)
+    if (engineBufferPromise) return engineBufferPromise
+
+    engineBufferPromise = loadBuffer(engineLoopUrl).then((buffer) => {
+      engineBuffer = buffer
+      return buffer
+    })
+
+    return engineBufferPromise
+  }
+
+  const ensureCrashBuffer = (): Promise<AudioBuffer> => {
+    if (crashBuffer) return Promise.resolve(crashBuffer)
+    if (crashBufferPromise) return crashBufferPromise
+
+    crashBufferPromise = loadBuffer(crashSoundUrl).then((buffer) => {
+      crashBuffer = buffer
+      return buffer
+    })
+
+    return crashBufferPromise
+  }
+
+  const stopActiveEngineSource = () => {
+    if (!engineSource) return
+    try {
+      engineSource.stop()
+    } catch {
+      // Source might already be stopped.
+    }
+    engineSource.disconnect()
+    engineSource = null
+  }
+
+  const startEngineSource = (playStartupSegment: boolean) => {
+    if (!context || !engineFilter || !engineBuffer) return
+
+    stopActiveEngineSource()
+
+    const source = context.createBufferSource()
+    source.buffer = engineBuffer
+    source.loop = true
+    source.loopStart = startupDurationSec
+    source.loopEnd = Math.max(startupDurationSec + 0.01, engineBuffer.duration)
+    source.playbackRate.value = currentEnginePlaybackRate
+
+    source.connect(engineFilter)
+    source.start(0, playStartupSegment ? 0 : startupDurationSec)
+
+    engineSource = source
   }
 
   const shortTone = (frequency: number, durationMs: number, gainAmount: number) => {
@@ -104,13 +159,27 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
   }
 
   const playOneShotSample = (url: string, level: number) => {
-    if (!enabled || typeof window === 'undefined') return
-    const sample = new Audio(url)
-    sample.preload = 'auto'
-    sample.volume = clamp(level, 0, 1)
-    sample.currentTime = 0
-    void sample.play().catch(() => {
-      // Playback can fail before first user gesture on some browsers.
+    if (!enabled) return
+
+    const ctx = ensureContext()
+    if (!ctx || !masterGain) return
+
+    const run = async () => {
+      const buffer = url === crashSoundUrl ? await ensureCrashBuffer() : await loadBuffer(url)
+      if (!context || !masterGain) return
+
+      const source = context.createBufferSource()
+      const gain = context.createGain()
+      gain.gain.value = clamp(level, 0, 1)
+
+      source.buffer = buffer
+      source.connect(gain)
+      gain.connect(masterGain)
+      source.start()
+    }
+
+    void run().catch(() => {
+      // Ignore audio fetch/decode failures gracefully.
     })
   }
 
@@ -128,64 +197,55 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     },
     startEngine: () => {
       if (!enabled) return
+      shouldEngineRun = true
       initializeEngine()
-      if (!context || !engineGain || !engineAudio) return
+      if (!context || !engineGain) return
 
       const now = context.currentTime
       engineGain.gain.cancelScheduledValues(now)
       engineGain.gain.setTargetAtTime(clamp(volume * 0.24, 0.04, 0.35), now, 0.08)
 
-      if (!startupPlayed) {
-        engineAudio.currentTime = 0
-        startupPlayed = true
-      } else if (engineAudio.currentTime < startupDurationSec) {
-        engineAudio.currentTime = startupDurationSec
-      }
-
-      if (engineAudio.paused) {
-        void engineAudio.play().catch(() => {
-          // Playback can fail before first user gesture on some browsers.
+      void ensureEngineBuffer()
+        .then(() => {
+          if (!shouldEngineRun) return
+          startEngineSource(!startupPlayed)
+          startupPlayed = true
         })
-      }
+        .catch(() => {
+          // Ignore audio fetch/decode failures gracefully.
+        })
     },
     updateEngineRpm: (rpm: number) => {
       if (!enabled) return
       initializeEngine()
-      if (!context || !engineAudio || !engineFilter) return
+      if (!context || !engineFilter) return
 
       const rpmClamped = clamp(rpm, 1000, 8000)
       const normalized = (rpmClamped - 1000) / 7000
       const now = context.currentTime
       const playbackRate = 0.68 + normalized * 1.32
+      currentEnginePlaybackRate = clamp(playbackRate, 0.65, 2)
 
-      engineAudio.playbackRate = clamp(playbackRate, 0.65, 2)
-      engineFilter.frequency.setTargetAtTime(1200 + normalized * 2600, now, 0.12)
-
-      const preservePitchElement = engineAudio as HTMLAudioElement & {
-        mozPreservesPitch?: boolean
-        webkitPreservesPitch?: boolean
-        preservesPitch?: boolean
+      if (engineSource) {
+        engineSource.playbackRate.setTargetAtTime(currentEnginePlaybackRate, now, 0.08)
       }
-      preservePitchElement.preservesPitch = false
-      preservePitchElement.webkitPreservesPitch = false
-      preservePitchElement.mozPreservesPitch = false
+
+      engineFilter.frequency.setTargetAtTime(1200 + normalized * 2600, now, 0.12)
     },
     stopEngine: () => {
+      shouldEngineRun = false
       if (!context || !engineGain) return
       const now = context.currentTime
       engineGain.gain.cancelScheduledValues(now)
       engineGain.gain.setTargetAtTime(0.0001, now, 0.08)
 
-      if (engineAudio) {
-        engineAudio.pause()
-      }
+      window.setTimeout(() => {
+        stopActiveEngineSource()
+      }, 120)
     },
     stopAll: () => {
-      if (engineAudio) {
-        engineAudio.pause()
-        engineAudio.currentTime = 0
-        engineAudio.onended = null
-      }
+      shouldEngineRun = false
+      stopActiveEngineSource()
 
       if (context) {
         void context.close()
@@ -196,7 +256,10 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
       engineGain = null
       engineFilter = null
       engineSource = null
-      engineAudio = null
+      engineBuffer = null
+      crashBuffer = null
+      engineBufferPromise = null
+      crashBufferPromise = null
       engineInitialized = false
       startupPlayed = false
     },
