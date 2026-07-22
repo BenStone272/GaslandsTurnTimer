@@ -93,15 +93,23 @@ export function Game() {
   const progress = progressFromRemaining(timer.remainingMs, durationMs)
   const rpm = timer.isExpired ? 8000 : rpmFromProgress(progress)
 
+  const shouldRunEngine =
+    !showPause && !showSettings && !gameEnded && !showBanner && !timer.isExpired
+
   useEffect(() => {
-    if (showPause || showSettings || gameEnded || showBanner || timer.isExpired) {
+    if (!shouldRunEngine) {
       audio.stopEngine()
       return
     }
 
     audio.startEngine()
+  }, [audio, shouldRunEngine])
+
+  useEffect(() => {
+    if (!shouldRunEngine) return
+
     audio.updateEngineRpm(rpm)
-  }, [audio, rpm, showPause, showSettings, gameEnded, showBanner, timer.isExpired])
+  }, [audio, rpm, shouldRunEngine])
 
   const remainingSeconds = Math.ceil(timer.remainingMs / 1000)
   const yellowOn = remainingSeconds <= settings.warningThresholds.yellow

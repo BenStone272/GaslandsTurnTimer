@@ -44,7 +44,7 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
   let shouldEngineRun = false
   let startupPlayed = false
   let currentEnginePlaybackRate = 0.68
-  const startupDurationSec = 1
+  const loopStartSec = 1
 
   const ensureContext = (): AudioContext | null => {
     if (!enabled) return null
@@ -139,12 +139,12 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
     const source = context.createBufferSource()
     source.buffer = engineBuffer
     source.loop = true
-    source.loopStart = startupDurationSec
-    source.loopEnd = Math.max(startupDurationSec + 0.01, engineBuffer.duration)
+    source.loopStart = loopStartSec
+    source.loopEnd = Math.max(loopStartSec + 0.01, engineBuffer.duration)
     source.playbackRate.value = currentEnginePlaybackRate
 
     source.connect(engineFilter)
-    source.start(0, playStartupSegment ? 0 : startupDurationSec)
+    source.start(0, playStartupSegment ? 0 : loopStartSec)
 
     engineSource = source
   }
@@ -221,6 +221,7 @@ export function createAudioController(enabled: boolean, volume: number): AudioCo
       void ensureEngineBuffer()
         .then(() => {
           if (!shouldEngineRun) return
+          if (engineSource) return
           startEngineSource(!startupPlayed)
           startupPlayed = true
         })
